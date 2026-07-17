@@ -41,6 +41,39 @@ function utf8ToBase64(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 
+// "Làm sạch" GitHub token trước khi dùng để gọi API.
+// Header HTTP (Authorization) chỉ được chứa ký tự ISO-8859-1 (Latin-1, mã <= 255).
+// Khi copy token từ nơi khác (Zalo, Notes, Word...) đôi khi dính thêm:
+// - khoảng trắng đặc biệt (non-breaking space, zero-width space)
+// - dấu ngoặc kiểu chữ “ ” ‘ ’
+// - ký tự tiếng Việt có dấu, emoji...
+// Những ký tự này làm fetch() ném lỗi:
+//   "String contains non ISO-8859-1 code point"
+// và khiến việc đồng bộ lên GitHub thất bại ngay từ bước đầu.
+// Hàm này trim khoảng trắng thường + xoá các ký tự ẩn hay gặp khi copy-paste,
+// đồng thời kiểm tra phần còn lại có phải mã Latin-1 hợp lệ không.
+function sanitizeGithubToken(rawToken) {
+  if (!rawToken) return { token: "", error: null };
+
+  // Xoá các ký tự khoảng trắng ẩn/đặc biệt hay gặp khi copy-paste
+  let cleaned = rawToken
+    .replace(/[\u200B-\u200D\uFEFF\u00A0\u2028\u2029]/g, "") // zero-width, NBSP, line/paragraph sep
+    .trim();
+
+  // Kiểm tra còn ký tự nào ngoài ISO-8859-1 (mã > 255) không
+  const hasInvalidChar = [...cleaned].some((ch) => ch.codePointAt(0) > 255);
+
+  if (hasInvalidChar) {
+    return {
+      token: cleaned,
+      error:
+        "Token GitHub chứa ký tự không hợp lệ (có thể do dính khoảng trắng đặc biệt, dấu ngoặc kiểu chữ, hoặc ký tự lạ khi copy). Vui lòng xoá ô token và dán lại token gốc (chỉ gồm chữ/số, dạng ghp_... hoặc github_pat_...).",
+    };
+  }
+
+  return { token: cleaned, error: null };
+}
+
 function debounce(fn, wait) {
   let timeout;
   return (...args) => {

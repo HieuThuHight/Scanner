@@ -26,10 +26,29 @@ function setGithubLastSyncAt(timestamp) {
   localStorage.setItem(GITHUB_LOCAL_LAST_SYNC_KEY, String(timestamp));
 }
 
+// Bọc riêng lỗi "String contains non ISO-8859-1 code point" (token dính ký tự
+// lạ khi copy-paste) thành thông báo tiếng Việt dễ hiểu thay vì để crash thô.
+function rethrowIfBadTokenChars(err) {
+  if (
+    err instanceof TypeError &&
+    /ISO-8859-1|Headers|headers/i.test(err.message)
+  ) {
+    throw new Error(
+      "Token GitHub chứa ký tự không hợp lệ (thường do copy dính khoảng trắng đặc biệt hoặc ký tự lạ). Hãy xoá ô token và dán lại token gốc.",
+    );
+  }
+  throw err;
+}
+
 async function getGithubFileSha(path, token) {
-  const res = await fetch(githubApiUrl(path), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res;
+  try {
+    res = await fetch(githubApiUrl(path), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    rethrowIfBadTokenChars(err);
+  }
   if (!res.ok) return null;
   const info = await res.json();
   return info.sha;
@@ -43,14 +62,19 @@ async function uploadGithubFile(path, contentBase64, message, token, sha) {
   };
   if (sha) body.sha = sha;
 
-  const res = await fetch(githubApiUrl(path), {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(githubApiUrl(path), {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    rethrowIfBadTokenChars(err);
+  }
   return res;
 }
 
@@ -153,11 +177,20 @@ async function pushToGithub() {
     toast("Chưa cấu hình repo GitHub trong js/app.js!", true);
     return;
   }
-  const token = githubTokenInput.value.trim();
+  const { token, error: tokenError } = sanitizeGithubToken(
+    githubTokenInput.value,
+  );
   if (!token) {
     toast("Nhập GitHub token để đồng bộ lên!", true);
     return;
   }
+  if (tokenError) {
+    toast(tokenError, true);
+    syncStatusEl.textContent = "Lỗi đồng bộ: token không hợp lệ.";
+    return;
+  }
+  // Đưa token đã làm sạch trở lại ô nhập, để lần bấm sau không bị lỗi lại
+  githubTokenInput.value = token;
 
   syncStatusEl.textContent = "Đang đồng bộ lên GitHub...";
 
@@ -188,7 +221,7 @@ async function pushToGithub() {
   } catch (err) {
     console.error(err);
     syncStatusEl.textContent = "Lỗi đồng bộ: " + err.message;
-    toast("Đồng bộ thất bại, kiểm tra token/quyền truy cập repo.", true);
+    toast(err.message || "Đồng bộ thất bại, kiểm tra token/quyền truy cập repo.", true);
   }
 }
 
