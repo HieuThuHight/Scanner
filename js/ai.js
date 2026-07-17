@@ -257,12 +257,21 @@ adminCaptureBtn.addEventListener("click", () => {
   const product = products[activeProductId];
   if (!product || product.photoCount >= MAX_PHOTOS_PER_PRODUCT) return;
 
-  // Chụp khung hình hiện tại của video ra ảnh xem trước (thumbnail)
-  captureCanvas.width = 240;
-  captureCanvas.height = (video.videoHeight / video.videoWidth) * 240 || 240;
+  // Chụp khung hình hiện tại của video ra ảnh xem trước (thumbnail), resize
+  // theo MAX_PHOTO_DIMENSION để ảnh lưu/train không bị nặng (ảnh gốc camera
+  // có thể lên tới 4000x3000 -> resize còn tối đa 800px cạnh dài nhất).
+  const sourceWidth = video.videoWidth || 800;
+  const sourceHeight = video.videoHeight || 800;
+  const { width, height } = computeResizedDimensions(
+    sourceWidth,
+    sourceHeight,
+    MAX_PHOTO_DIMENSION,
+  );
+  captureCanvas.width = width;
+  captureCanvas.height = height;
   const ctx = captureCanvas.getContext("2d");
   ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-  const dataUrl = captureCanvas.toDataURL("image/jpeg", 0.7);
+  const dataUrl = captureCanvas.toDataURL("image/jpeg", PHOTO_JPEG_QUALITY);
 
   // Tính vector đặc trưng AI ngay tại thời điểm chụp (giữ tensor chờ xác nhận)
   const tensor = tf.tidy(() => mobilenetModel.infer(video, true));

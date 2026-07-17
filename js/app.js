@@ -8,6 +8,13 @@ const MAX_PHOTOS_PER_PRODUCT = 10; // mỗi sản phẩm train tối đa 10 ản
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "admin123"; // DEMO ONLY - không dùng cho sản phẩm thật
 
+// Ảnh train được resize (giữ tỉ lệ khung hình) sao cho cạnh dài nhất không
+// vượt quá số này trước khi lưu — tránh lưu ảnh gốc kích thước camera (có thể
+// tới 4000x3000) khiến file JSON/ảnh nặng, commit GitHub chậm, tốn RAM.
+// 800 là mức cân bằng tốt giữa chất lượng nhìn và dung lượng (~90% nhẹ hơn ảnh gốc).
+const MAX_PHOTO_DIMENSION = 800;
+const PHOTO_JPEG_QUALITY = 0.75; // 0..1, càng thấp càng nhẹ nhưng càng giảm chất lượng
+
 // ====== CẤU HÌNH ĐỒNG BỘ GITHUB ======
 const GITHUB_OWNER = "HieuThuHight";
 const GITHUB_REPO = "Scanner";

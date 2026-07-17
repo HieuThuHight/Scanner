@@ -350,9 +350,15 @@ async function saveProductPhoto(product, canvas) {
   if (!product) return null;
   const blob = await new Promise((resolve) => {
     canvas.toBlob(
-      (b) => resolve(b || dataURLToBlob(canvas.toDataURL("image/jpeg", 0.7))),
+      (b) =>
+        resolve(
+          b ||
+            dataURLToBlob(
+              canvas.toDataURL("image/jpeg", PHOTO_JPEG_QUALITY),
+            ),
+        ),
       "image/jpeg",
-      0.7,
+      PHOTO_JPEG_QUALITY,
     );
   });
   const photoPath = `images/products/${product.id}/${Date.now()}.jpg`;

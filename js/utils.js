@@ -81,3 +81,18 @@ function debounce(fn, wait) {
     timeout = setTimeout(() => fn(...args), wait);
   };
 }
+
+// Tính kích thước đích khi resize ảnh, giữ nguyên tỉ lệ khung hình, sao cho
+// cạnh dài nhất không vượt quá maxSize. Nếu ảnh đã nhỏ hơn maxSize thì giữ
+// nguyên (không phóng to ảnh nhỏ lên).
+function computeResizedDimensions(sourceWidth, sourceHeight, maxSize) {
+  const longestSide = Math.max(sourceWidth, sourceHeight);
+  if (!longestSide || longestSide <= maxSize) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+  const scale = maxSize / longestSide;
+  return {
+    width: Math.round(sourceWidth * scale),
+    height: Math.round(sourceHeight * scale),
+  };
+}

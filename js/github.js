@@ -131,31 +131,59 @@ async function pullFromGithub(notifyIfEmpty = true) {
   }
 }
 
+// Bảo vệ: đảm bảo JSON đẩy lên GitHub KHÔNG BAO GIỜ chứa base64 ảnh
+// (đây chính là nguyên nhân khiến products.json từng nặng tới ~6MB).
+// Ảnh phải luôn là file .jpg riêng ở data/images/..., JSON chỉ chứa path.
+// Hàm này dọn phòng hờ nếu có dữ liệu base64 sót lại (dữ liệu cũ, bug khác...).
+function stripBase64Fields(obj) {
+  const clone = { ...obj };
+  for (const key of ["photos", "photoUrls", "images"]) {
+    if (Array.isArray(clone[key])) {
+      delete clone[key]; // các field này chỉ dùng tạm trong bộ nhớ, không đẩy lên GitHub
+    }
+  }
+  return clone;
+}
+
+function assertNoBase64(payload, label) {
+  const json = JSON.stringify(payload);
+  if (json.includes("data:image")) {
+    throw new Error(
+      `${label} vẫn còn dính ảnh base64 (data:image...) — đã CHẶN đẩy lên GitHub để tránh làm phình repo. Báo lại cho người sửa code.`,
+    );
+  }
+}
+
 async function buildGithubUploads(token) {
   const uploads = [];
 
-  // index payload
-  const indexPayload = buildIndexPayload();
+  // index payload — chỉ chứa thông tin sản phẩm + dữ liệu AI, KHÔNG chứa ảnh
+  const indexPayload = stripBase64Fields(buildIndexPayload());
+  assertNoBase64(indexPayload, "File index sản phẩm");
   uploads.push({
     path: GITHUB_PATH,
     content: utf8ToBase64(JSON.stringify(indexPayload)),
     message: "Cập nhật sản phẩm - index",
   });
 
-  // per-product details
+  // per-product details — chỉ chứa photoPaths (đường dẫn), KHÔNG chứa ảnh
   for (const id in products) {
     const product = products[id];
     if (!product) continue;
-    const detailPayload = {
+    const detailPayload = stripBase64Fields({
       ...getProductDetailPayload(product),
       name: product.name,
-    };
+    });
+    assertNoBase64(detailPayload, `Chi tiết sản phẩm "${product.name}"`);
     uploads.push({
       path: productDetailPath(id),
       content: utf8ToBase64(JSON.stringify(detailPayload)),
       message: `Cập nhật chi tiết sản phẩm ${product.name}`,
     });
 
+    // Ảnh thật luôn được đẩy như FILE NHỊ PHÂN RIÊNG tại data/images/products/<id>/...
+    // — nội dung base64 ở đây là để gửi lên GitHub Contents API (bắt buộc phải encode
+    // base64 khi gọi API), KHÔNG PHẢI lưu base64 vào JSON.
     if (Array.isArray(product.photoPaths)) {
       for (const photoPath of product.photoPaths) {
         const blob = await getImageBlob(photoPath);
@@ -195,6 +223,14 @@ async function pushToGithub() {
   syncStatusEl.textContent = "Đang đồng bộ lên GitHub...";
 
   try {
+    // Phòng hờ: nếu còn sản phẩm nào giữ ảnh base64 cũ (dữ liệu từ trước khi
+    // có hệ thống lưu ảnh riêng file), chuyển hết sang file + photoPaths
+    // TRƯỚC khi build danh sách upload, để không bao giờ đẩy base64 lên GitHub.
+    const migrated = await migrateAllDataUrlPhotos();
+    if (migrated) {
+      await saveDataToLocalStorage(false);
+    }
+
     const uploads = await buildGithubUploads(token);
     for (const item of uploads) {
       const sha = await getGithubFileSha(item.path, token);

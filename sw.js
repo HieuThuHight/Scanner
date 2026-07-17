@@ -5,7 +5,7 @@
 // PWA/đã từng mở trang có thể tiếp tục chạy bản JS CŨ mãi mãi (vì chiến
 // lược bên dưới có phần cache-first cho ảnh/icon), gây ra tình trạng "sửa
 // code rồi mà web vẫn chạy như cũ" rất khó phát hiện.
-const CACHE_NAME = "sp-nha-cache-v3";
+const CACHE_NAME = `cache-${Date.now()}`;
 const APP_SHELL = [
   "./index.html",
   "./style.css",
