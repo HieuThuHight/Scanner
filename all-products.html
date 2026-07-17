@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Danh sách tất cả sản phẩm</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+    <style>
+      body {
+        padding: 16px;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 20;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .page-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 12px;
+      }
+      .product-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .product-table th,
+      .product-table td {
+        border: 1px solid #e5e7eb;
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .product-table th {
+        background: #f3f4f6;
+      }
+      .top-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .top-bar input,
+      .top-bar select {
+        flex: 1;
+        min-width: 180px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="page-heading">
+        <div>
+          <h1>📦 Tất cả sản phẩm</h1>
+          <p style="margin: 4px 0 0; color: #4b5563; font-size: 14px">
+            Hiển thị danh sách đầy đủ sản phẩm và các trường thông tin chi tiết.
+          </p>
+        </div>
+        <a href="index.html" class="secondary">↩️ Trở về</a>
+      </div>
+    </header>
+
+    <div class="top-bar">
+      <input
+        id="all-search-input"
+        type="text"
+        placeholder="Tìm sản phẩm theo tên, mã, danh mục, ghi chú..."
+      />
+      <select id="all-sort-order">
+        <option value="desc">Sắp xếp: Mới nhất</option>
+        <option value="asc">Sắp xếp: Cũ nhất</option>
+      </select>
+    </div>
+
+    <div id="all-products-container"></div>
+
+    <script src="js/utils.js"></script>
+    <script>
+      const allProductsContainer = document.querySelector(
+        "#all-products-container",
+      );
+      const allSearchInput = document.querySelector("#all-search-input");
+      const allSortOrder = document.querySelector("#all-sort-order");
+      const STORAGE_KEY = "ai-product-scanner-data";
+
+      let products = {};
+
+      function normalizeProduct(product) {
+        return {
+          id: product.id,
+          name: product.name || "",
+          code: product.code || "",
+          price: product.price || "",
+          category: product.category || "",
+          notes: product.notes || "",
+          status: product.status || "Thêm",
+          createdAt: product.createdAt || new Date().toISOString(),
+          photoCount: product.photoCount || 0,
+        };
+      }
+
+      function applyPayload(payload) {
+        const rawProducts = payload.products || {};
+        products = {};
+        for (const id in rawProducts) {
+          products[id] = normalizeProduct(rawProducts[id]);
+        }
+      }
+
+      async function loadProducts() {
+        // Luôn thử lấy bản MỚI NHẤT từ GitHub trước tiên, vì đây mới là
+        // nguồn dữ liệu "thật" (admin push lên từ index.html). Trước đây
+        // code ưu tiên đọc localStorage trước và return ngay nếu có sẵn
+        // (kể cả bản rỗng/cũ), khiến trang này mãi mãi không thấy dữ liệu
+        // mới dù đã đồng bộ thành công ở nơi khác.
+        try {
+          const res = await fetch(
+            "https://raw.githubusercontent.com/HieuXiot/SanPham/main/data/products.json?t=" +
+              Date.now(),
+          );
+          if (res.ok) {
+            const payload = await res.json();
+            applyPayload(payload);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            renderAllProducts();
+            return;
+          }
+        } catch (err) {
+          console.error("Không lấy được dữ liệu từ GitHub, thử dùng bản lưu cục bộ:", err);
+        }
+
+        // Chỉ dùng localStorage khi GitHub không tải được (vd: mất mạng)
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            applyPayload(JSON.parse(raw));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+
+        renderAllProducts();
+      }
+
+      function renderAllProducts() {
+        const searchTerm = (allSearchInput.value || "").trim().toLowerCase();
+        let entries = Object.values(products);
+        if (searchTerm) {
+          entries = entries.filter((product) => {
+            const haystack =
+              `${product.name} ${product.code} ${product.category} ${product.notes}`.toLowerCase();
+            return haystack.includes(searchTerm);
+          });
+        }
+        const sortOrder = allSortOrder.value === "asc" ? 1 : -1;
+        entries.sort((a, b) =>
+          a.createdAt === b.createdAt
+            ? 0
+            : a.createdAt > b.createdAt
+              ? sortOrder
+              : -sortOrder,
+        );
+
+        if (entries.length === 0) {
+          allProductsContainer.innerHTML =
+            "<p style='color:#6b7280;'>Chưa có sản phẩm nào hoặc không có kết quả tìm kiếm.</p>";
+          return;
+        }
+
+        allProductsContainer.innerHTML = `
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th>Tên</th>
+                <th>Mã / Barcode</th>
+                <th>Giá</th>
+                <th>Danh mục</th>
+                <th>Ghi chú</th>
+                <th>Trạng thái</th>
+                <th>Ảnh train</th>
+                <th>Thời gian gửi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${entries
+                .map(
+                  (product) => `
+                    <tr>
+                      <td>${product.name}</td>
+                      <td>${product.code || "(chưa có)"}</td>
+                      <td>${product.price || "(chưa có)"}</td>
+                      <td>${product.category || "(chưa có)"}</td>
+                      <td>${product.notes || "(không có)"}</td>
+                      <td>${product.status || "Chưa có"}</td>
+                      <td>${product.photoCount || 0}/${window.MAX_PHOTOS_PER_PRODUCT || 10}</td>
+                      <td>${new Date(product.createdAt || Date.now()).toLocaleString()}</td>
+                    </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      allSearchInput.addEventListener("input", renderAllProducts);
+      allSortOrder.addEventListener("change", renderAllProducts);
+
+      loadProducts();
+    </script>
+  </body>
+</html>

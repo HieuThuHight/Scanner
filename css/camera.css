@@ -1,0 +1,344 @@
+/* ===== CAMERA VIEW (nhận diện AI + quét Barcode/QR) ===== */
+#camera-view {
+  padding: 16px;
+}
+#back-btn {
+  margin-bottom: 12px;
+}
+
+/* Bố cục tổng: màn hình camera chỉ gồm khung hình + nút chụp ở ngay dưới */
+.camera-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.camera-main {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.camera-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#video-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+#video-wrap video {
+  width: 100%;
+  border-radius: 12px;
+  background: #000;
+  display: block;
+}
+#reader {
+  width: 100%;
+  margin: 0 auto;
+}
+#reader video {
+  border-radius: 12px;
+}
+
+/* Nút chụp: luôn nằm ngay dưới khung camera, to, dễ bấm bằng ngón cái */
+.capture-controls {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.shutter-btn {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 30px;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+.shutter-btn:disabled {
+  box-shadow: none;
+}
+
+#public-result {
+  font-size: 15px;
+  font-weight: 600;
+  min-height: 22px;
+  margin-top: 2px;
+  text-align: center;
+  color: #4b5563;
+}
+
+/* ===== BẢNG THÔNG TIN SẢN PHẨM sau khi nhận diện / quét mã ===== */
+.result-card {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto 16px;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  animation: result-pop 0.18s ease-out;
+}
+@keyframes result-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.result-card.low-confidence {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.result-card.not-found {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+.result-card-header {
+  margin-bottom: 6px;
+}
+.result-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+}
+.result-badge.low {
+  background: #fef3c7;
+  color: #92400e;
+}
+.result-badge.not-found {
+  background: #fee2e2;
+  color: #991b1b;
+}
+#result-card-name {
+  margin: 6px 0 12px;
+  font-size: 19px;
+}
+.result-card-body p {
+  margin: 6px 0;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+}
+.result-card-body span:empty::before {
+  content: "Chưa có";
+  color: #9ca3af;
+}
+
+/* ===== TABLET / DESKTOP: giữ bố cục dọc nhưng rộng hơn và đẹp hơn ===== */
+@media (min-width: 700px) {
+  .camera-main {
+    max-width: 520px;
+  }
+  .result-card {
+    padding: 18px 20px;
+  }
+}
+#status-banner {
+  font-size: 13px;
+  color: #6b7280;
+  padding: 0 16px;
+}
+
+/* Khung nhận diện (overlay) + FPS + trạng thái AI — sẵn sàng cho phần
+   nâng cấp UI khung quét vuông, hiển thị FPS, trạng thái model AI */
+.detect-frame {
+  position: absolute;
+  inset: 12%;
+  border: 3px solid #22c55e;
+  border-radius: 12px;
+  pointer-events: none;
+}
+.fps-badge,
+.ai-status-badge {
+  position: absolute;
+  top: 8px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.fps-badge {
+  left: 8px;
+}
+.ai-status-badge {
+  right: 8px;
+}
+
+/* ===== ADMIN — QUÉT QR/BARCODE (khung quét toàn màn hình) =====
+   html5-qrcode tự gán width/height CỐ ĐỊNH BẰNG PX (inline style) cho thẻ
+   <video> ngay lúc mở camera, tính theo kích thước khung tại thời điểm đó.
+   Vì là inline style nên CSS width:100% thường KHÔNG thắng được nó — đây là
+   lý do khung hình bị "đóng băng" nhỏ xíu, đặc biệt là trên điện thoại.
+   Phải dùng !important thì CSS mới ép lại được kích thước theo %. */
+#admin-scan-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: #111827;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+#admin-scan-panel.hidden {
+  display: none !important;
+}
+#admin-scan-title {
+  color: #f9fafb;
+  font-size: 15px;
+  margin: 4px 0 14px;
+  text-align: center;
+}
+#admin-scan-reader-wrap {
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 3 / 4;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+}
+/* Ép mọi div bọc mà thư viện tự tạo bên trong luôn lấp đầy khung */
+#admin-scan-reader-wrap > div,
+#admin-scan-reader-wrap > div > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+#admin-scan-reader-wrap video,
+#admin-scan-reader-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+#admin-scan-panel #admin-scan-preview {
+  max-width: 520px;
+  margin: 14px auto 0;
+  background: #1f2937;
+  border-color: #374151;
+}
+#admin-scan-panel #admin-scan-preview p {
+  color: #f9fafb;
+}
+#admin-scan-panel #admin-scan-decoded {
+  font-size: 20px !important;
+}
+#admin-scan-panel .row {
+  max-width: 520px;
+  width: 100%;
+  margin: 14px auto 0;
+}
+#admin-scan-panel .row button {
+  flex: 1;
+}
+
+/* ===== ADMIN — CHỤP ẢNH SẢN PHẨM (khung camera toàn màn hình) =====
+   Trước đây #admin-video-wrap không có CSS riêng nào — khung camera bị kẹt
+   trong luồng cuộn bình thường của trang Admin nên rất nhỏ, nhất là trên
+   điện thoại. Áp dụng cùng kiểu overlay toàn màn hình như khung quét QR để
+   đồng bộ và luôn to rõ. */
+#admin-capture-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: #111827;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+#admin-capture-panel.hidden {
+  display: none !important;
+}
+#admin-capture-title {
+  color: #f9fafb;
+  font-size: 15px;
+  margin: 4px 0 14px;
+  text-align: center;
+}
+#admin-video-wrap {
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 3 / 4;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+}
+#admin-video-wrap video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+  border-radius: 0;
+}
+#admin-capture-status {
+  max-width: 520px;
+  width: 100%;
+  margin: 10px auto 0 !important;
+  text-align: center;
+  color: #d1d5db !important;
+}
+#admin-capture-controls {
+  max-width: 520px;
+  width: 100%;
+  margin: 12px auto 0;
+}
+#admin-capture-controls button {
+  flex: 1;
+}
+#admin-capture-btn {
+  flex: 2 !important;
+  font-weight: 700;
+}
+#admin-capture-panel #admin-capture-preview {
+  max-width: 520px;
+  margin: 14px auto 0;
+  background: #1f2937;
+  border-color: #374151;
+}
+#admin-capture-panel #admin-capture-preview p {
+  color: #f9fafb !important;
+}
+#admin-capture-panel #admin-thumb-grid {
+  max-width: 520px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Danh sách đề xuất "Có thể bạn đang muốn" sau khi nhận diện */
+#suggestion-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#suggestion-list .suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}

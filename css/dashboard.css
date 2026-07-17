@@ -1,0 +1,35 @@
+/* ===== DASHBOARD ADMIN =====
+   Khung sườn CSS cho phần Dashboard (tổng sản phẩm, tổng ảnh AI,
+   sản phẩm chưa đủ ảnh, lần train cuối, biểu đồ thống kê...).
+   Sẵn sàng để js/dashboard.js render vào. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+}
+.dashboard-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.dashboard-card .value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2563eb;
+}
+.dashboard-card .label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+.dashboard-chart {
+  width: 100%;
+  min-height: 160px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+}

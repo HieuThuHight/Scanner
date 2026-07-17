@@ -1,0 +1,151 @@
+/* =========================================================
+   STYLE.CSS — CSS TỔNG (reset, base, layout dùng chung)
+   Các phần riêng theo màn hình nằm ở css/home.css, css/admin.css,
+   css/camera.css, css/dashboard.css, css/notification.css
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0;
+  color: #111827;
+  background: #ffffff;
+}
+h1 {
+  font-size: 18px;
+  margin: 0;
+}
+h2 {
+  font-size: 17px;
+}
+h3 {
+  font-size: 15px;
+}
+button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+button.secondary {
+  background: #4b5563;
+}
+button.danger {
+  background: #dc2626;
+}
+button.small {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+input[type="text"],
+input[type="password"] {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ===== LOADING SCREEN ===== */
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  background: #2563eb;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 999;
+}
+#loading-screen .spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+#loading-screen p {
+  font-size: 15px;
+  opacity: 0.95;
+}
+
+/* ===== HEADER + MENU TRƯỢT ===== */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+#menu-btn {
+  background: transparent;
+  color: #111827;
+  font-size: 24px;
+  padding: 4px 10px;
+}
+#side-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(300px, 85vw);
+  background: white;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+  z-index: 500;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 400;
+}
+#side-menu button {
+  width: 100%;
+  text-align: left;
+}
+#side-menu hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 6px 0;
+}
+
+/* Panel dùng chung nhiều nơi (admin, github sync...) */
+.panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 10px;
+  background: #f9fafb;
+}

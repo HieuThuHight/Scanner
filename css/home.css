@@ -1,0 +1,29 @@
+/* ===== HOME VIEW: 2 NÚT TO (Nhận diện AI / Quét Barcode) ===== */
+#home-view {
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.big-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  border-radius: 20px;
+  font-size: 20px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+.big-btn .icon {
+  font-size: 44px;
+}
+#mode-scan-btn.big-btn {
+  background: #059669;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.25);
+}
+.big-btn:disabled {
+  box-shadow: none;
+}

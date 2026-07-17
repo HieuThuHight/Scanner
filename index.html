@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+    />
+    <title>Nhận diện & quét mã sản phẩm</title>
+
+    <!-- ===== CSS: style.css = tổng, còn lại tách theo từng khu vực ===== -->
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="css/home.css" />
+    <link rel="stylesheet" href="css/camera.css" />
+    <link rel="stylesheet" href="css/admin.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/notification.css" />
+  </head>
+  <body>
+    <!-- ===== MÀN HÌNH LOADING ===== -->
+    <div id="loading-screen">
+      <div class="spinner"></div>
+      <p id="loading-text">Đang tải model AI...</p>
+    </div>
+
+    <!-- ===== HEADER ===== -->
+    <header>
+      <h1>📦 Nhận diện & quét mã</h1>
+      <button id="menu-btn">☰</button>
+    </header>
+
+    <p id="status-banner"></p>
+
+    <!-- ===== MENU TRƯỢT (chứa các chức năng phụ) ===== -->
+    <div id="menu-overlay" class="hidden"></div>
+    <div id="side-menu" class="hidden">
+      <h2>Menu</h2>
+      <button id="install-app-btn" class="secondary hidden">
+        ⬇️ Cài đặt app
+      </button>
+      <button id="admin-login-toggle" class="secondary">
+        🔑 Đăng nhập Admin
+      </button>
+      <button id="goto-admin-btn" class="secondary hidden">
+        🛠️ Trang quản trị
+      </button>
+      <button id="admin-logout-btn" class="danger hidden">🚪 Đăng xuất</button>
+
+      <div id="login-box" class="hidden">
+        <div class="row">
+          <input type="text" id="admin-username" placeholder="Tài khoản" />
+        </div>
+        <div class="row">
+          <input type="password" id="admin-password" placeholder="Mật khẩu" />
+        </div>
+        <div class="row">
+          <button id="admin-login-btn">Đăng nhập</button>
+          <button id="admin-login-cancel" class="secondary">Huỷ</button>
+        </div>
+      </div>
+
+      <hr />
+      <button id="close-menu-btn" class="secondary">Đóng menu</button>
+    </div>
+
+    <!-- ===== TRANG CHÍNH: 2 NÚT TO ===== -->
+    <main id="home-view">
+      <button id="mode-recognize-btn" class="big-btn" disabled>
+        <span class="icon">📸</span>
+        Nhận diện qua ảnh
+      </button>
+      <button id="mode-scan-btn" class="big-btn">
+        <span class="icon">🔍</span>
+        Quét mã sản phẩm
+      </button>
+    </main>
+
+    <!-- ===== MÀN HÌNH CAMERA (nhận diện / quét mã) ===== -->
+    <div id="camera-view" class="hidden">
+      <button id="back-btn" class="secondary">⬅ Quay lại</button>
+
+      <div id="public-result-card" class="result-card hidden">
+        <div class="result-card-header">
+          <span id="result-card-badge" class="result-badge"></span>
+        </div>
+        <h3 id="result-card-name"></h3>
+        <div class="result-card-body">
+          <p><strong>Giá:</strong> <span id="result-card-price"></span></p>
+          <p>
+            <strong>Danh mục:</strong>
+            <span id="result-card-category"></span>
+          </p>
+          <p><strong>Ghi chú:</strong> <span id="result-card-notes"></span></p>
+          <p><strong>Mã:</strong> <span id="result-card-code"></span></p>
+        </div>
+        <div class="row" style="justify-content: center">
+          <button id="result-retake-btn" class="secondary">
+            🔄 Không đúng, chụp lại
+          </button>
+        </div>
+      </div>
+
+      <div class="camera-stage">
+        <div class="camera-main">
+          <div class="camera-frame">
+            <div id="video-wrap" class="hidden">
+              <video id="video" autoplay muted playsinline></video>
+            </div>
+            <div id="reader" class="hidden"></div>
+            <canvas id="public-capture-canvas" class="hidden"></canvas>
+          </div>
+
+          <div id="public-capture-row" class="capture-controls hidden">
+            <button id="public-capture-btn" class="shutter-btn">
+              📸 Chụp để nhận diện
+            </button>
+          </div>
+          <div id="public-scan-retry-row" class="capture-controls hidden">
+            <button id="public-scan-retry-btn" class="secondary">
+              🔄 Quét mã khác
+            </button>
+          </div>
+          <div id="public-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB ADMIN ===== -->
+    <section id="admin-tab" class="hidden">
+      <!-- HEADER: Back button + Search bar -->
+      <div class="admin-header-row">
+        <button id="admin-back-btn" class="secondary">⬅ Về trang chính</button>
+        <input
+          type="text"
+          id="admin-search-input"
+          placeholder="Tìm sản phẩm..."
+        />
+        <button id="admin-search-btn" class="secondary">🔎 Tìm kiếm</button>
+      </div>
+
+      <!-- 3 NÚT CHÍNH: Dashboard | Quản lý sản phẩm | Đồng bộ GitHub -->
+      <div class="admin-main-buttons">
+        <button id="view-dashboard-btn" class="main-btn active">
+          📊 Thống kê sản phẩm
+        </button>
+        <button id="view-manage-btn" class="main-btn">
+          📦 Quản lý sản phẩm
+        </button>
+        <button id="view-sync-btn" class="main-btn">
+          ☁️ Đồng bộ lên GitHub
+        </button>
+      </div>
+
+      <!-- VIEW 1: DASHBOARD -->
+      <div id="admin-dashboard-view" class="admin-view">
+        <div id="dashboard-view"></div>
+      </div>
+
+      <!-- VIEW 2: QUẢN LÝ SẢN PHẨM -->
+      <div id="admin-manage-view" class="admin-view hidden">
+        <div class="admin-manage-controls">
+          <div class="row">
+            <button id="add-product-toggle-btn" class="secondary">
+              ➕ Thêm sản phẩm
+            </button>
+            <select id="admin-sort-order">
+              <option value="desc">Sắp xếp: Mới nhất</option>
+              <option value="asc">Sắp xếp: Cũ nhất</option>
+            </select>
+            <button id="view-all-products-btn" class="secondary">
+              Xem tất cả
+            </button>
+          </div>
+        </div>
+        <ul id="product-list"></ul>
+      </div>
+
+      <!-- VIEW 3: ĐỒNG BỘ GITHUB -->
+      <div id="admin-sync-view" class="admin-view hidden">
+        <div class="panel">
+          <h3>☁️ Đồng bộ dữ liệu cho cả nhà (GitHub)</h3>
+          <p id="sync-status" style="font-size: 13px; color: #6b7280">
+            Chưa đồng bộ lần nào.
+          </p>
+          <div class="row">
+            <input
+              type="password"
+              id="github-token"
+              placeholder="GitHub token (chỉ admin, không lưu lại)"
+              style="flex: 1; min-width: 220px"
+            />
+          </div>
+          <div class="row">
+            <button id="push-github-btn">☁️ Đồng bộ lên GitHub</button>
+            <button id="pull-github-btn" class="secondary">
+              🔄 Tải mới nhất từ GitHub
+            </button>
+          </div>
+          <small
+            >Người nhà khác (không phải admin) chỉ cần mở app, dữ liệu tự tải
+            về, không cần nhập token.</small
+          >
+        </div>
+
+        <div class="row">
+          <button id="save-data-btn" class="secondary">
+            💾 Sao lưu ra file (dự phòng)
+          </button>
+          <button id="load-data-btn" class="secondary">📂 Nạp từ file</button>
+          <input type="file" id="load-data-input" accept=".json" hidden />
+          <button id="reset-all-btn" class="danger">🗑️ Xoá hết dữ liệu</button>
+        </div>
+      </div>
+
+      <!-- VIEW FORM THÊM SẢN PHẨM (ẩn mặc định) -->
+      <div id="admin-add-view" class="hidden">
+        <div class="row">
+          <button id="add-cancel-btn" class="secondary">⬅ Quay lại</button>
+          <h2>Thêm sản phẩm mới</h2>
+        </div>
+        <div class="row">
+          <input type="text" id="new-product-name" placeholder="Tên sản phẩm" />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="new-product-code"
+            placeholder="Mã sản phẩm (tuỳ chọn)"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="new-product-qr-code"
+            placeholder="Mã QR / Barcode (tuỳ chọn, lưu riêng)"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="new-product-price"
+            placeholder="Giá sản phẩm"
+          />
+        </div>
+        <div class="row">
+          <input type="text" id="new-product-category" placeholder="Danh mục" />
+        </div>
+        <div class="row">
+          <input type="text" id="new-product-notes" placeholder="Ghi chú" />
+        </div>
+        <div class="row">
+          <button id="add-product-btn" style="flex: 1">✅ Thêm sản phẩm</button>
+        </div>
+      </div>
+
+      <!-- VIEW SỬA SẢN PHẨM -->
+      <div id="admin-edit-view" class="hidden">
+        <div class="row">
+          <button id="edit-cancel-btn" class="secondary">⬅ Quay lại</button>
+          <h2>Sửa sản phẩm</h2>
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="edit-product-name"
+            placeholder="Tên sản phẩm"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="edit-product-code"
+            placeholder="Mã sản phẩm (thủ công)"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="edit-product-qr-code"
+            placeholder="Mã QR / Barcode (tùy chọn, lưu riêng)"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="edit-product-price"
+            placeholder="Giá sản phẩm"
+          />
+        </div>
+        <div class="row">
+          <input
+            type="text"
+            id="edit-product-category"
+            placeholder="Danh mục"
+          />
+        </div>
+        <div class="row">
+          <input type="text" id="edit-product-notes" placeholder="Ghi chú" />
+        </div>
+        <div class="row">
+          <button id="edit-product-capture-btn" class="secondary">
+            📸 Chụp ảnh
+          </button>
+          <button id="edit-product-scan-btn" class="secondary">
+            🔗 Quét mã
+          </button>
+          <button id="edit-product-save-btn" style="flex: 1">
+            ✅ Lưu sản phẩm
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW XEM TẤT CẢ SẢN PHẨM (ẩn mặc định) -->
+      <div id="admin-all-view" class="hidden">
+        <div class="row">
+          <button id="all-back-btn" class="secondary">
+            ⬅ Quay lại danh sách
+          </button>
+        </div>
+        <div id="admin-all-products-content"></div>
+      </div>
+
+      <div id="admin-detail-panel" class="panel hidden">
+        <div
+          class="row"
+          style="justify-content: space-between; align-items: flex-start"
+        >
+          <div>
+            <h3>Chi tiết sản phẩm</h3>
+            <p
+              id="detail-status-label"
+              style="margin: 0; font-size: 13px; color: #4b5563"
+            ></p>
+          </div>
+          <button id="admin-detail-close" class="secondary">Đóng</button>
+        </div>
+        <div
+          id="detail-content"
+          style="font-size: 14px; line-height: 1.6"
+        ></div>
+        <div class="row" style="justify-content: flex-end">
+          <button id="detail-edit-btn" class="small secondary">✏️ Sửa</button>
+          <button id="detail-delete-btn" class="small danger">🗑️ Xoá</button>
+        </div>
+      </div>
+
+      <div id="admin-capture-panel" class="panel hidden">
+        <h3 id="admin-capture-title"></h3>
+        <div id="admin-video-wrap"></div>
+
+        <!-- Trạng thái: đã chụp bao nhiêu ảnh -->
+        <p
+          id="admin-capture-status"
+          style="font-size: 13px; color: #6b7280"
+        ></p>
+
+        <div class="row" id="admin-capture-controls">
+          <button id="admin-capture-btn"></button>
+          <button id="admin-undo-btn" class="secondary">
+            ↩️ Hoàn tác ảnh vừa chụp
+          </button>
+          <button id="admin-capture-close" class="secondary">Đóng</button>
+        </div>
+
+        <!-- Xem trước ảnh vừa chụp: xác nhận lưu hoặc chụp lại -->
+        <div id="admin-capture-preview" class="hidden panel">
+          <p style="margin-top: 0; font-size: 13px; color: #4b5563">
+            Ảnh vừa chụp:
+          </p>
+          <img
+            id="admin-capture-preview-img"
+            alt="Ảnh vừa chụp"
+            style="
+              width: 100%;
+              max-width: 280px;
+              border-radius: 10px;
+              display: block;
+              margin: 0 auto;
+            "
+          />
+          <div class="row">
+            <button id="admin-confirm-btn">✅ Lưu ảnh</button>
+            <button id="admin-retake-btn" class="secondary">🔄 Chụp lại</button>
+          </div>
+        </div>
+
+        <!-- Lưới thumbnail các ảnh đã chụp cho sản phẩm này -->
+        <div id="admin-thumb-grid" class="thumb-grid"></div>
+
+        <canvas id="capture-canvas" class="hidden"></canvas>
+      </div>
+
+      <div id="admin-scan-panel" class="panel hidden">
+        <h3 id="admin-scan-title"></h3>
+        <div id="admin-scan-reader-wrap"></div>
+
+        <!-- Vừa quét được 1 mã: hỏi xác nhận trước khi gán -->
+        <div id="admin-scan-preview" class="hidden panel">
+          <p style="margin-top: 0; font-size: 13px; color: #4b5563">
+            Vừa quét được mã (sẽ lưu vào Barcode):
+          </p>
+          <p
+            id="admin-scan-decoded"
+            style="font-size: 18px; font-weight: 700; text-align: center"
+          ></p>
+          <div class="row">
+            <button id="admin-scan-confirm-btn">✅ Xác nhận gán Barcode</button>
+            <button id="admin-scan-retry-btn" class="secondary">
+              🔄 Quét lại
+            </button>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="admin-scan-close" class="secondary">Đóng</button>
+        </div>
+      </div>
+
+      <!-- Khung Thông báo riêng: js/notification.js sẽ render vào đây -->
+      <div class="panel">
+        <h3>🔔 Thông báo</h3>
+        <div class="row">
+          <button id="notif-mark-read-btn" class="small secondary">
+            Đánh dấu đã đọc
+          </button>
+          <button id="notif-clear-btn" class="small danger">Xoá tất cả</button>
+        </div>
+        <div id="notification-list"></div>
+      </div>
+
+      <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb" />
+
+      <!-- HUẤN LUYỆN LẠI (nút duy nhất dưới cùng) -->
+      <div class="row" style="margin-top: 20px">
+        <button id="retrain-btn" class="secondary">🤖 Huấn luyện lại</button>
+      </div>
+    </section>
+
+    <!-- ===== THƯ VIỆN NGOÀI ===== -->
+    <script
+      type="text/javascript"
+      src="https://cdn.jsdelivr.net/npm/toastify-js"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.4/dist/knn-classifier.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <!-- ===== CÁC MODULE CỦA APP — thứ tự load quan trọng, đừng đảo lộn ===== -->
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/barcode.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/github.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/notification.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

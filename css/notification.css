@@ -1,0 +1,37 @@
+/* ===== THÔNG BÁO =====
+   Toast nhanh (Toastify) dùng chung toàn app, cộng thêm khung sườn
+   cho danh sách "Thông báo" riêng (⚠ thiếu ảnh, thiếu barcode, train
+   thành công, đã lưu ảnh...) mà js/notification.js sẽ render vào. */
+.toastify {
+  border-radius: 8px !important;
+  font-size: 14px !important;
+}
+
+#notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.notification-item.success {
+  border-left-color: #059669;
+}
+.notification-item.unread {
+  background: #eff6ff;
+}
+.notification-item .time {
+  font-size: 11px;
+  color: #9ca3af;
+}
