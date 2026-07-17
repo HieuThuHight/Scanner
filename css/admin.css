@@ -262,6 +262,83 @@
   text-align: left;
 }
 
+/* Thanh tìm kiếm + sắp xếp trong "Xem tất cả" */
+.admin-all-topbar {
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.admin-all-topbar input,
+.admin-all-topbar select {
+  flex: 1;
+  min-width: 180px;
+  height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Badge trạng thái đã/chưa training */
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-badge.untrained {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.status-badge.trained {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Thanh phân trang */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+.pagination-bar button {
+  min-width: 34px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.pagination-bar button:hover:not(:disabled):not(.active) {
+  background: #f3f4f6;
+}
+.pagination-bar button.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+.pagination-bar button:disabled {
+  opacity: 0.4;
+  color: #9ca3af;
+  background: white;
+  cursor: not-allowed;
+}
+.pagination-info {
+  color: #6b7280;
+  font-size: 12px;
+  width: 100%;
+  text-align: center;
+}
+
 /* Nút button trong form thêm sản phẩm */
 #admin-add-view button {
   padding: 8px 12px;

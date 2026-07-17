@@ -328,7 +328,20 @@
             ⬅ Quay lại danh sách
           </button>
         </div>
+        <div class="admin-all-topbar row">
+          <input
+            type="text"
+            id="admin-all-search-input"
+            placeholder="Tìm sản phẩm theo tên, mã, danh mục, ghi chú..."
+          />
+          <select id="admin-all-sort-order">
+            <option value="desc">Sắp xếp: Mới nhất</option>
+            <option value="asc">Sắp xếp: Cũ nhất</option>
+            <option value="untrained">Sắp xếp: Chưa training trước 🔥</option>
+          </select>
+        </div>
         <div id="admin-all-products-content"></div>
+        <div id="admin-all-pagination" class="pagination-bar"></div>
       </div>
 
       <div id="admin-detail-panel" class="panel hidden">

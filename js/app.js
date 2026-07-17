@@ -9,9 +9,9 @@ const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "admin123"; // DEMO ONLY - không dùng cho sản phẩm thật
 
 // ====== CẤU HÌNH ĐỒNG BỘ GITHUB ======
-const GITHUB_OWNER = "HieuThuHight";
-const GITHUB_REPO = "Scanner";
-const GITHUB_PATH = "data/products.json";
+const GITHUB_OWNER = "HieuXiot";
+const GITHUB_REPO = "SanPham";
+const GITHUB_PATH = "data/products-index.json";
 const GITHUB_BRANCH = "main";
 const GITHUB_CONFIGURED =
   GITHUB_OWNER !== "ten-tai-khoan-github-cua-ban" &&
@@ -58,10 +58,15 @@ async function loadMobilenetWithRetry(config, maxAttempts = 4) {
       return await mobilenet.load(config);
     } catch (err) {
       lastErr = err;
-      console.warn(`Tải mobilenet thất bại (lần ${attempt}/${maxAttempts}):`, err);
+      console.warn(
+        `Tải mobilenet thất bại (lần ${attempt}/${maxAttempts}):`,
+        err,
+      );
       if (attempt < maxAttempts) {
         // Chờ tăng dần: 1s, 2s, 4s... để tránh spam ngay lúc mạng/host đang lỗi
-        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * 2 ** (attempt - 1)),
+        );
       }
     }
   }
@@ -82,16 +87,20 @@ async function init() {
       // alpha nhỏ hơn, vì nó được lưu ở một model id/host khác trên Kaggle
       // nên có thể không gặp cùng sự cố.
       console.warn("Không tải được mobilenet alpha:1, thử alpha:0.75...", err);
-      loadingText.textContent = "Model chính đang lỗi, đang thử bản dự phòng...";
-      mobilenetModel = await loadMobilenetWithRetry({ version: 1, alpha: 0.75 });
+      loadingText.textContent =
+        "Model chính đang lỗi, đang thử bản dự phòng...";
+      mobilenetModel = await loadMobilenetWithRetry({
+        version: 1,
+        alpha: 0.75,
+      });
     }
 
     loadingText.textContent = "Đang tải dữ liệu cục bộ...";
-    loadDataFromLocalStorage();
+    await loadDataFromLocalStorage();
 
     if (GITHUB_CONFIGURED) {
-      loadingText.textContent = "Đang lấy dữ liệu mới nhất...";
-      await pullFromGithub(false);
+      loadingText.textContent = "Kiểm tra dữ liệu GitHub...";
+      await pullFromGithubIfNeeded(false);
     }
 
     // Render (và lưu lại) SAU khi dữ liệu thật (local hoặc GitHub) đã nạp

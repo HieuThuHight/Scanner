@@ -33,38 +33,50 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
       ),
-    ),
   );
   self.clients.claim();
 });
 
 // Chỉ cache các file "khung" của app (HTML/CSS/JS/icon).
-// Các request khác (model AI, GitHub API, camera...) luôn lấy từ mạng.
+// Ngoài ra cache thêm index/detail/image từ GitHub raw để tải nhanh và offline tốt hơn.
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  const pathname = url.pathname;
   const isAppShellFile = APP_SHELL.some((f) =>
-    url.pathname.endsWith(f.replace("./", "")),
+    pathname.endsWith(f.replace("./", "")),
   );
+  const isGithubRawData =
+    url.hostname === "raw.githubusercontent.com" &&
+    (pathname.endsWith("data/products-index.json") ||
+      pathname.includes("/data/products/") ||
+      pathname.includes("/data/images/products/"));
 
-  if (isAppShellFile) {
+  if (isAppShellFile || isGithubRawData) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
-        return (
-          cached ||
-          fetch(event.request).then((res) => {
+        if (cached) return cached;
+        return fetch(event.request)
+          .then((res) => {
+            if (!res || res.status !== 200 || res.type === "opaque") {
+              return res;
+            }
             const resClone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, resClone));
             return res;
           })
-        );
+          .catch(() => cached || Promise.reject("Network error"));
       }),
     );
   }
-  // các request khác: để mặc định đi thẳng ra mạng
 });

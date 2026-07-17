@@ -14,7 +14,9 @@ const adminCaptureClose = document.querySelector("#admin-capture-close");
 
 const captureCanvas = document.querySelector("#capture-canvas");
 const adminCapturePreview = document.querySelector("#admin-capture-preview");
-const adminCapturePreviewImg = document.querySelector("#admin-capture-preview-img");
+const adminCapturePreviewImg = document.querySelector(
+  "#admin-capture-preview-img",
+);
 const adminConfirmBtn = document.querySelector("#admin-confirm-btn");
 const adminRetakeBtn = document.querySelector("#admin-retake-btn");
 const adminCaptureControls = document.querySelector("#admin-capture-controls");
@@ -51,7 +53,10 @@ function hideResultCard() {
 }
 
 // Đổ dữ liệu 1 sản phẩm ra bảng thông tin. status: "found" | "low" | "not-found"
-function showResultCard(status, { name, product, confidence, decodedCode } = {}) {
+function showResultCard(
+  status,
+  { name, product, confidence, decodedCode } = {},
+) {
   if (!publicResultCard) return;
   publicResultCard.classList.remove("hidden", "low-confidence", "not-found");
 
@@ -72,7 +77,7 @@ function showResultCard(status, { name, product, confidence, decodedCode } = {})
   resultCardPrice.textContent = product?.price || "";
   resultCardCategory.textContent = product?.category || "";
   resultCardNotes.textContent = product?.notes || "";
-  resultCardCode.textContent = (product?.code || decodedCode) || "";
+  resultCardCode.textContent = product?.code || decodedCode || "";
 }
 
 if (resultRetakeBtn) {
@@ -82,7 +87,10 @@ if (resultRetakeBtn) {
       publicResult.textContent = "Đưa sản phẩm vào khung hình rồi bấm Chụp";
       publicCaptureBtn.disabled = false;
       publicCaptureBtn.textContent = "📸 Chụp để nhận diện";
-    } else if (mode === "public-scan" && typeof publicScanRetryBtn !== "undefined") {
+    } else if (
+      mode === "public-scan" &&
+      typeof publicScanRetryBtn !== "undefined"
+    ) {
       publicScanRetryBtn.click();
     }
   });
@@ -129,7 +137,13 @@ publicCaptureBtn.addEventListener("click", async () => {
     publicCaptureCanvas.height = video.videoHeight || 320;
     publicCaptureCanvas
       .getContext("2d")
-      .drawImage(video, 0, 0, publicCaptureCanvas.width, publicCaptureCanvas.height);
+      .drawImage(
+        video,
+        0,
+        0,
+        publicCaptureCanvas.width,
+        publicCaptureCanvas.height,
+      );
 
     // QUAN TRỌNG: chỉ bọc tf.tidy quanh phần ĐỒNG BỘ (infer).
     // predictClass là hàm bất đồng bộ (trả Promise) nên KHÔNG được đặt trong
@@ -167,13 +181,12 @@ async function startAdminCapture(product) {
   await stopAllModes();
   mode = "admin-capture";
   activeProductId = product.id;
-  if (!product.photos) product.photos = []; // ảnh thumbnail để xem lại (không phải vector AI)
   adminCapturePanel.classList.remove("hidden");
   adminCaptureTitle.textContent = `Chụp ảnh cho: ${product.name}`;
   moveVideoTo(adminVideoWrap);
   hideCapturePreview();
   updateAdminCaptureBtn();
-  renderThumbGrid();
+  await renderThumbGrid();
   try {
     await openCamera();
   } catch (err) {
@@ -197,9 +210,10 @@ function updateAdminCaptureBtn() {
 }
 
 // Vẽ lưới thumbnail các ảnh đã chụp cho sản phẩm đang mở, có nút xoá từng ảnh
-function renderThumbGrid() {
+async function renderThumbGrid() {
   const product = products[activeProductId];
   if (!product || !adminThumbGrid) return;
+  await ensureProductPhotos(product);
   const photos = product.photos || [];
   if (photos.length === 0) {
     adminThumbGrid.innerHTML =
@@ -218,14 +232,14 @@ function renderThumbGrid() {
     .join("");
 }
 
-adminThumbGrid.addEventListener("click", (e) => {
+adminThumbGrid.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-thumb-index]");
   if (!btn) return;
   const product = products[activeProductId];
   if (!product) return;
-  removePhotoAt(product, Number(btn.dataset.thumbIndex));
+  await removePhotoAt(product, Number(btn.dataset.thumbIndex));
   updateAdminCaptureBtn();
-  renderThumbGrid();
+  await renderThumbGrid();
   renderProductList();
   renderDashboard();
 });
@@ -262,20 +276,19 @@ adminCaptureBtn.addEventListener("click", () => {
 // ====================================================
 // BƯỚC 2a: XÁC NHẬN -> mới thật sự lưu vào classifier + thumbnail
 // ====================================================
-adminConfirmBtn.addEventListener("click", () => {
+adminConfirmBtn.addEventListener("click", async () => {
   const product = products[activeProductId];
   if (!product || !pendingSnapshot) return;
 
   classifier.addExample(pendingSnapshot.tensor, product.id);
   pendingSnapshot.tensor.dispose();
-  if (!product.photos) product.photos = [];
-  product.photos.push(pendingSnapshot.dataUrl);
-  product.photoCount++;
   pendingSnapshot = null;
+
+  await saveProductPhoto(product, captureCanvas);
 
   hideCapturePreview();
   updateAdminCaptureBtn();
-  renderThumbGrid();
+  await renderThumbGrid();
   renderProductList();
   markTrained();
   addNotification(`📸 Đã lưu ảnh cho "${product.name}"`, "success");
@@ -286,6 +299,7 @@ adminConfirmBtn.addEventListener("click", () => {
   toast(
     `Đã lưu ảnh cho "${product.name}" (${product.photoCount}/${MAX_PHOTOS_PER_PRODUCT})`,
   );
+  saveDataToLocalStorage();
 });
 
 // ====================================================
@@ -301,7 +315,7 @@ adminRetakeBtn.addEventListener("click", () => {
 });
 
 // Xoá 1 ảnh bất kỳ (theo vị trí) khỏi classifier + danh sách thumbnail của sản phẩm
-function removePhotoAt(product, index) {
+async function removePhotoAt(product, index) {
   const dataset = classifier.getClassifierDataset();
   const tensor = dataset[product.id];
   if (!tensor) return;
@@ -326,9 +340,9 @@ function removePhotoAt(product, index) {
   }
   classifier.setClassifierDataset(dataset);
 
-  if (product.photos) product.photos.splice(index, 1);
-  product.photoCount = Math.max(0, product.photoCount - 1);
+  await removeProductPhoto(product, index);
   toast(`Đã xoá 1 ảnh của "${product.name}"`);
+  saveDataToLocalStorage();
 }
 
 // Nút "Hoàn tác ảnh vừa chụp" = xoá nhanh tấm ảnh cuối cùng

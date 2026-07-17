@@ -70,6 +70,10 @@ const adminAllView = document.querySelector("#admin-all-view");
 const adminAllProductsContent = document.querySelector(
   "#admin-all-products-content",
 );
+const adminAllSearchInput = document.querySelector("#admin-all-search-input");
+const adminAllSortOrder = document.querySelector("#admin-all-sort-order");
+const adminAllPagination = document.querySelector("#admin-all-pagination");
+const ALL_PRODUCTS_PAGE_SIZE = 5; // phân trang tối đa 5 sản phẩm/trang cho nhanh
 
 // ===== DETAIL PANEL =====
 const adminDetailPanel = document.querySelector("#admin-detail-panel");
@@ -164,6 +168,7 @@ function showAllView() {
   adminEditView?.classList.add("hidden");
   adminAllView?.classList.remove("hidden");
   adminDetailPanel?.classList.add("hidden");
+  allProductsCurrentPage = 1;
   renderAllProductsInView();
 }
 
@@ -316,7 +321,6 @@ function renderProductList() {
   if (visibleProducts.length === 0) {
     productList.innerHTML =
       "<li>Chưa có sản phẩm nào hoặc không có kết quả tìm kiếm.</li>";
-    if (typeof saveDataToLocalStorage === "function") saveDataToLocalStorage();
     return;
   }
 
@@ -389,8 +393,12 @@ if (adminAllProductsContent) {
   });
 }
 
-if (adminSearchInput)
-  adminSearchInput.addEventListener("input", renderProductList);
+if (adminSearchInput) {
+  adminSearchInput.addEventListener(
+    "input",
+    debounce(() => renderProductList(), 300),
+  );
+}
 if (adminSearchBtn) adminSearchBtn.addEventListener("click", renderProductList);
 if (adminSortOrder)
   adminSortOrder.addEventListener("change", renderProductList);
@@ -473,7 +481,6 @@ function showProductDetail(product) {
   detailEditBtn.dataset.productId = product.id;
   detailDeleteBtn.dataset.productId = product.id;
   adminDetailPanel.classList.remove("hidden");
-  if (typeof saveDataToLocalStorage === "function") saveDataToLocalStorage();
 }
 
 function deleteProduct(product) {
@@ -492,31 +499,98 @@ function deleteProduct(product) {
   delete products[product.id];
   adminDetailPanel.classList.add("hidden");
   renderProductList();
+  if (adminAllView && !adminAllView.classList.contains("hidden")) {
+    renderAllProductsInView();
+  }
   toast("Đã xoá sản phẩm.");
 }
 
 // ====================================================
 // RENDER ALL PRODUCTS IN VIEW (Xem tất cả)
 // ====================================================
+let allProductsCurrentPage = 1;
+// Cache danh sách đã lọc + sắp xếp, chỉ tính lại khi search/sort/data đổi
+// thay vì tính lại mỗi lần chuyển trang -> đỡ tốn CPU khi danh sách dài.
+let allProductsFilteredEntries = [];
+
+function isProductUntrained(product) {
+  return (product.photoCount || 0) < MAX_PHOTOS_PER_PRODUCT;
+}
+
+function statusBadgeHtml(product) {
+  return isProductUntrained(product)
+    ? `<span class="status-badge untrained">⏳ Chưa training</span>`
+    : `<span class="status-badge trained">✅ Đã training</span>`;
+}
+
+function recomputeAllProductsEntries() {
+  const searchTerm = (adminAllSearchInput?.value || "").trim().toLowerCase();
+  let entries = Object.values(products).map(normalizeProduct);
+
+  if (searchTerm) {
+    entries = entries.filter((product) => {
+      const haystack =
+        `${product.name} ${product.code} ${product.qrCode || ""} ${product.category} ${product.notes}`.toLowerCase();
+      return haystack.includes(searchTerm);
+    });
+  }
+
+  const sortValue = adminAllSortOrder?.value || "desc";
+  if (sortValue === "untrained") {
+    // Sản phẩm CHƯA train đủ ảnh lên đầu (ít ảnh nhất trước), phần còn lại
+    // xếp theo thời gian mới nhất.
+    entries.sort((a, b) => {
+      const aUntrained = isProductUntrained(a);
+      const bUntrained = isProductUntrained(b);
+      if (aUntrained !== bUntrained) return aUntrained ? -1 : 1;
+      const aCount = a.photoCount || 0;
+      const bCount = b.photoCount || 0;
+      if (aCount !== bCount) return aCount - bCount;
+      return a.createdAt === b.createdAt
+        ? 0
+        : a.createdAt > b.createdAt
+          ? -1
+          : 1;
+    });
+  } else {
+    const sortOrder = sortValue === "asc" ? 1 : -1;
+    entries.sort((a, b) =>
+      a.createdAt === b.createdAt
+        ? 0
+        : a.createdAt > b.createdAt
+          ? sortOrder
+          : -sortOrder,
+    );
+  }
+
+  allProductsFilteredEntries = entries;
+}
+
 function renderAllProductsInView() {
   if (!adminAllProductsContent) return;
 
-  let entries = Object.values(products).map(normalizeProduct);
-
-  // Sorting
-  const sortOrder = adminSortOrder?.value === "asc" ? 1 : -1;
-  entries.sort((a, b) =>
-    a.createdAt === b.createdAt
-      ? 0
-      : a.createdAt > b.createdAt
-        ? sortOrder
-        : -sortOrder,
-  );
+  recomputeAllProductsEntries();
+  const entries = allProductsFilteredEntries;
 
   if (entries.length === 0) {
-    adminAllProductsContent.innerHTML = "<p>Chưa có sản phẩm nào.</p>";
+    adminAllProductsContent.innerHTML =
+      "<p>Chưa có sản phẩm nào hoặc không có kết quả tìm kiếm.</p>";
+    if (adminAllPagination) adminAllPagination.innerHTML = "";
     return;
   }
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(entries.length / ALL_PRODUCTS_PAGE_SIZE),
+  );
+  if (allProductsCurrentPage > totalPages) allProductsCurrentPage = totalPages;
+  if (allProductsCurrentPage < 1) allProductsCurrentPage = 1;
+
+  const start = (allProductsCurrentPage - 1) * ALL_PRODUCTS_PAGE_SIZE;
+  // Chỉ render đúng 5 sản phẩm của trang hiện tại ra DOM thay vì "nhồi" toàn
+  // bộ danh sách -> giảm hẳn số node HTML phải dựng/parse, mở nhanh hơn hẳn
+  // khi dữ liệu nhiều.
+  const pageEntries = entries.slice(start, start + ALL_PRODUCTS_PAGE_SIZE);
 
   let html = `
     <table class="product-table">
@@ -527,6 +601,7 @@ function renderAllProductsInView() {
           <th>Giá</th>
           <th>Danh mục</th>
           <th>Ghi chú</th>
+          <th>Trạng thái</th>
           <th>Ảnh train</th>
           <th>Thời gian gửi</th>
           <th>Hành động</th>
@@ -535,7 +610,7 @@ function renderAllProductsInView() {
       <tbody>
   `;
 
-  for (const product of entries) {
+  for (const product of pageEntries) {
     const createdDate = new Date(product.createdAt).toLocaleString();
     html += `
       <tr>
@@ -544,6 +619,7 @@ function renderAllProductsInView() {
         <td>${product.price || "(chưa có)"}</td>
         <td>${product.category || "(chưa có)"}</td>
         <td>${product.notes || "(không có)"}</td>
+        <td>${statusBadgeHtml(product)}</td>
         <td>${product.photoCount || 0}/${MAX_PHOTOS_PER_PRODUCT}</td>
         <td>${createdDate}</td>
         <td>
@@ -560,4 +636,83 @@ function renderAllProductsInView() {
   `;
 
   adminAllProductsContent.innerHTML = html;
+  renderAllProductsPagination(totalPages, entries.length);
+}
+
+function renderAllProductsPagination(totalPages, totalCount) {
+  if (!adminAllPagination) return;
+
+  if (totalPages <= 1) {
+    adminAllPagination.innerHTML = `<span class="pagination-info">Tổng cộng ${totalCount} sản phẩm</span>`;
+    return;
+  }
+
+  const buttons = [];
+  buttons.push(
+    `<button data-page="${allProductsCurrentPage - 1}" ${allProductsCurrentPage === 1 ? "disabled" : ""}>‹</button>`,
+  );
+
+  // Hiển thị tối đa 7 nút số trang, có "…" khi danh sách trang dài
+  const pageNumbers = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (
+      p === 1 ||
+      p === totalPages ||
+      (p >= allProductsCurrentPage - 1 && p <= allProductsCurrentPage + 1)
+    ) {
+      pageNumbers.push(p);
+    }
+  }
+  let lastShown = 0;
+  pageNumbers.forEach((p) => {
+    if (lastShown && p - lastShown > 1) {
+      buttons.push(
+        `<span class="pagination-info" style="width:auto;">…</span>`,
+      );
+    }
+    buttons.push(
+      `<button data-page="${p}" class="${p === allProductsCurrentPage ? "active" : ""}">${p}</button>`,
+    );
+    lastShown = p;
+  });
+
+  buttons.push(
+    `<button data-page="${allProductsCurrentPage + 1}" ${allProductsCurrentPage === totalPages ? "disabled" : ""}>›</button>`,
+  );
+
+  adminAllPagination.innerHTML =
+    buttons.join("") +
+    `<span class="pagination-info">Trang ${allProductsCurrentPage}/${totalPages} • Tổng ${totalCount} sản phẩm</span>`;
+
+  adminAllPagination.querySelectorAll("button[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const page = Number(btn.dataset.page);
+      if (
+        !page ||
+        page < 1 ||
+        page > totalPages ||
+        page === allProductsCurrentPage
+      )
+        return;
+      allProductsCurrentPage = page;
+      renderAllProductsInView();
+      adminAllProductsContent.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  });
+}
+
+if (adminAllSearchInput) {
+  adminAllSearchInput.addEventListener("input", () => {
+    allProductsCurrentPage = 1;
+    renderAllProductsInView();
+  });
+}
+if (adminAllSortOrder) {
+  adminAllSortOrder.addEventListener("change", () => {
+    allProductsCurrentPage = 1;
+    renderAllProductsInView();
+  });
 }

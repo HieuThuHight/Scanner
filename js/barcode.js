@@ -110,13 +110,16 @@ async function startPublicScan() {
       await html5QrCode.pause(true);
     } catch (e) {}
 
-    const product = Object.values(products).find(
-      (p) => p.qrCode === decodedText || p.code === decodedText,
-    );
+    const productId = barcodeMap.get(decodedText);
+    const product = productId ? products[productId] : null;
     if (product) {
       publicResult.textContent = "";
       if (typeof showResultCard === "function") {
-        showResultCard("found", { name: product.name, product, confidence: 100 });
+        showResultCard("found", {
+          name: product.name,
+          product,
+          confidence: 100,
+        });
       }
       toast(`Tìm thấy: ${product.name}`);
     } else {
@@ -184,10 +187,7 @@ adminScanConfirmBtn.addEventListener("click", async () => {
 
   // Đồng bộ lại ô input trên form Sửa (nếu đang mở form Sửa của đúng sản phẩm này),
   // tránh việc bấm "Lưu" sau đó ghi đè mất mã vừa quét bằng giá trị cũ trong ô input.
-  if (
-    editProductQrCode &&
-    editProductSaveBtn?.dataset.id === product.id
-  ) {
+  if (editProductQrCode && editProductSaveBtn?.dataset.id === product.id) {
     editProductQrCode.value = product.qrCode;
   }
 

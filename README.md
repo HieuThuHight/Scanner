@@ -1,1 +1,2 @@
-# Scanner product  on web/app
+# SanPham
+Quét mã sản phẩm

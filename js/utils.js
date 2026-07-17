@@ -40,3 +40,11 @@ function friendlyCameraError(err) {
 function utf8ToBase64(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
+
+function debounce(fn, wait) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
+  };
+}
