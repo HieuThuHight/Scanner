@@ -5,7 +5,25 @@
 // PWA/đã từng mở trang có thể tiếp tục chạy bản JS CŨ mãi mãi (vì chiến
 // lược bên dưới có phần cache-first cho ảnh/icon), gây ra tình trạng "sửa
 // code rồi mà web vẫn chạy như cũ" rất khó phát hiện.
-const CACHE_NAME = "scanner-cache-v2.1.0";
+const VERSION = "2.1.0";
+const CACHE_NAME = `scanner-cache-${VERSION}`;
+
+self.addEventListener("install", (event) => {
+    self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+    event.waitUntil(
+        caches.keys().then((keys) =>
+            Promise.all(
+                keys
+                    .filter((key) => key !== CACHE_NAME)
+                    .map((key) => caches.delete(key))
+            )
+        )
+    );
+    self.clients.claim();
+});
 const APP_SHELL = [
   "./index.html",
   "./style.css",
