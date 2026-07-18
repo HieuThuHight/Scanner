@@ -286,6 +286,7 @@ if (addProductBtn) {
       photoCount: 0,
       photos: [],
     };
+    if (typeof markProductDirty === "function") markProductDirty(id);
     renderProductList();
     toast(`Đã thêm sản phẩm "${name}"`);
     showMainView();
@@ -458,6 +459,7 @@ if (editProductSaveBtn) {
     product.price = editProductPrice.value.trim();
     product.category = editProductCategory.value.trim();
     product.notes = editProductNotes.value.trim();
+    if (typeof markProductDirty === "function") markProductDirty(productId);
     renderProductList();
     toast(`Đã cập nhật sản phẩm "${product.name}"`);
     showMainView();
@@ -496,6 +498,8 @@ function deleteProduct(product) {
     classifier.setClassifierDataset(dataset);
   }
 
+  if (typeof markProductDeleted === "function")
+    markProductDeleted(product.id);
   delete products[product.id];
   adminDetailPanel.classList.add("hidden");
   renderProductList();

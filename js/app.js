@@ -105,6 +105,13 @@ async function init() {
     loadingText.textContent = "Đang tải dữ liệu cục bộ...";
     await loadDataFromLocalStorage();
 
+    // Nạp cache SHA + danh sách sản phẩm "dirty" (dùng để chỉ đồng bộ phần
+    // thay đổi lên GitHub) — phải xong TRƯỚC KHI admin có thể thêm/sửa sản
+    // phẩm, nếu không có thể bị bỏ lỡ một lượt đánh dấu dirty.
+    if (typeof ensureSyncStateLoaded === "function") {
+      await ensureSyncStateLoaded();
+    }
+
     if (GITHUB_CONFIGURED) {
       loadingText.textContent = "Kiểm tra dữ liệu GitHub...";
       await pullFromGithubIfNeeded(false);

@@ -10,6 +10,98 @@ const syncStatusEl = document.querySelector("#sync-status");
 const GITHUB_SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 phút
 const GITHUB_LOCAL_LAST_SYNC_KEY = "githubLastSyncAt";
 
+// ====================================================
+// TRẠNG THÁI ĐỒNG BỘ "THÔNG MINH" — chỉ đẩy phần đã đổi
+// ====================================================
+// dirtyProductIds: id sản phẩm có thay đổi cục bộ (thêm/sửa/thêm-xoá ảnh)
+// CHƯA được đẩy lên GitHub. Lúc đồng bộ, chỉ những sản phẩm này (+ file
+// index tổng) mới được đóng gói upload — sản phẩm không đổi thì bỏ qua
+// hoàn toàn, kể cả ảnh của nó.
+//
+// githubShaCache: path -> sha nội dung ĐÃ BIẾT là đang nằm trên GitHub (do
+// lần trước tự tay đẩy lên). Dùng để: (1) khỏi phải GET lấy sha trước mỗi
+// lần PUT, và (2) so sánh với sha1 tính từ nội dung cục bộ để biết file có
+// thực sự đổi không — giống hệt sha mà GitHub dùng cho blob (git object sha1)
+// nên so được trực tiếp, không cần gọi API.
+const GITHUB_SHA_CACHE_KEY = "githubShaCacheV1";
+const GITHUB_DIRTY_IDS_KEY = "githubDirtyProductIdsV1";
+const GITHUB_MIGRATED_KEY = "githubSyncMigratedV1";
+const GITHUB_UPLOAD_BATCH_SIZE = 5; // upload song song tối đa 5 file/đợt
+
+let githubShaCache = new Map();
+let dirtyProductIds = new Set();
+let syncStateLoadedPromise = null;
+
+function persistDirtyState() {
+  return saveMeta(GITHUB_DIRTY_IDS_KEY, Array.from(dirtyProductIds));
+}
+
+function persistShaCache() {
+  return saveMeta(GITHUB_SHA_CACHE_KEY, Object.fromEntries(githubShaCache));
+}
+
+// Gọi 1 lần lúc khởi động app (xem app.js). Idempotent — gọi nhiều lần chỉ
+// nạp/migrate đúng 1 lần nhờ cache promise.
+function ensureSyncStateLoaded() {
+  if (syncStateLoadedPromise) return syncStateLoadedPromise;
+  syncStateLoadedPromise = (async () => {
+    const [savedSha, savedDirty, migrated] = await Promise.all([
+      loadMeta(GITHUB_SHA_CACHE_KEY),
+      loadMeta(GITHUB_DIRTY_IDS_KEY),
+      loadMeta(GITHUB_MIGRATED_KEY),
+    ]);
+    githubShaCache = new Map(Object.entries(savedSha || {}));
+    dirtyProductIds = new Set(savedDirty || []);
+
+    if (!migrated) {
+      // Nâng cấp từ bản cũ (chưa có cơ chế dirty-tracking): đánh dấu TOÀN BỘ
+      // sản phẩm hiện có là "dirty" đúng 1 lần duy nhất, để lần đồng bộ tới
+      // đẩy đủ dữ liệu lên (khỏi bỏ sót sản phẩm cũ chưa có sha cache). Từ
+      // lần đồng bộ SAU đó trở đi mới thực sự chỉ đẩy phần thay đổi.
+      for (const id in products) dirtyProductIds.add(id);
+      await saveMeta(GITHUB_MIGRATED_KEY, true);
+      await persistDirtyState();
+    }
+  })();
+  return syncStateLoadedPromise;
+}
+
+// Gọi mỗi khi sản phẩm được thêm/sửa/đổi ảnh — đánh dấu để lần đồng bộ tới
+// chắc chắn đẩy sản phẩm này lên (không phụ thuộc phải nhớ gọi ở đúng chỗ,
+// cứ gọi thừa cũng không sao, tốn kém duy nhất là 1 lần upload lại).
+function markProductDirty(productId) {
+  if (!productId) return;
+  dirtyProductIds.add(productId);
+  persistDirtyState();
+}
+
+// Gọi khi xoá hẳn 1 sản phẩm — không cần đẩy sản phẩm này lên nữa.
+// (Lưu ý: file cũ của sản phẩm này trên GitHub, nếu đã từng đồng bộ trước
+// đó, sẽ không tự bị xoá theo — hành vi này giống hệt bản trước khi tối ưu.)
+function markProductDeleted(productId) {
+  if (!productId) return;
+  dirtyProductIds.delete(productId);
+  persistDirtyState();
+}
+
+// sha1("blob " + length + "\0" + content) — chính là công thức GitHub dùng
+// để tính sha cho mỗi file (content.sha trong Contents API). Tính được sha
+// này từ nội dung cục bộ cho phép so sánh trực tiếp với sha cache mà KHÔNG
+// cần gọi API để biết file có đổi hay không.
+async function gitBlobSha1FromBase64(base64Content) {
+  const binary = atob(base64Content);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const combined = new Uint8Array(header.length + bytes.length);
+  combined.set(header, 0);
+  combined.set(bytes, header.length);
+  const digest = await crypto.subtle.digest("SHA-1", combined);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function githubRawUrl(path = GITHUB_PATH) {
   return `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
 }
@@ -154,7 +246,10 @@ function assertNoBase64(payload, label) {
   }
 }
 
-async function buildGithubUploads(token) {
+// Chỉ đóng gói upload cho: file index (luôn nhẹ, luôn cần cập nhật) + những
+// sản phẩm đang "dirty". Sản phẩm không đổi bị bỏ qua hoàn toàn — kể cả
+// việc đọc ảnh của nó — nên từ ~600 file mỗi lần đồng bộ giờ chỉ còn vài file.
+async function buildGithubUploads(dirtyIds) {
   const uploads = [];
 
   // index payload — chỉ chứa thông tin sản phẩm + dữ liệu AI, KHÔNG chứa ảnh
@@ -166,10 +261,10 @@ async function buildGithubUploads(token) {
     message: "Cập nhật sản phẩm - index",
   });
 
-  // per-product details — chỉ chứa photoPaths (đường dẫn), KHÔNG chứa ảnh
-  for (const id in products) {
+  for (const id of dirtyIds) {
     const product = products[id];
-    if (!product) continue;
+    if (!product) continue; // đã bị xoá cục bộ trước khi kịp đồng bộ
+
     const detailPayload = stripBase64Fields({
       ...getProductDetailPayload(product),
       name: product.name,
@@ -186,18 +281,80 @@ async function buildGithubUploads(token) {
     // base64 khi gọi API), KHÔNG PHẢI lưu base64 vào JSON.
     if (Array.isArray(product.photoPaths)) {
       for (const photoPath of product.photoPaths) {
-        const blob = await getImageBlob(photoPath);
-        if (!blob) continue;
+        const githubPath = `data/${photoPath}`;
+
+        // Dùng base64 đã cache sẵn lúc chụp ảnh nếu có — khỏi đọc lại Blob
+        // từ IndexedDB rồi encode lại từ đầu.
+        let base64 = pendingPhotoBase64.get(photoPath);
+        if (!base64) {
+          const blob = await getImageBlob(photoPath);
+          if (!blob) continue;
+          base64 = await blobToBase64(blob);
+        }
+
+        // Ảnh chụp xong không đổi nội dung nữa — nếu sha1 nội dung trùng với
+        // sha đã biết là đang có trên GitHub thì bỏ qua hẳn, không upload lại.
+        const contentSha = await gitBlobSha1FromBase64(base64);
+        if (githubShaCache.get(githubPath) === contentSha) continue;
+
         uploads.push({
-          path: `data/${photoPath}`,
-          content: await blobToBase64(blob),
+          path: githubPath,
+          content: base64,
           message: `Upload ảnh sản phẩm ${product.name}`,
+          contentSha,
         });
       }
     }
   }
 
   return uploads;
+}
+
+// Đẩy 1 file lên GitHub, tận dụng sha đã cache để KHÔNG cần gọi GET trước —
+// chỉ khi PUT thất bại (sha cache lệch/thiếu, ví dụ lần đồng bộ đầu tiên hay
+// file bị đổi từ nơi khác) mới lấy sha mới nhất rồi thử lại đúng 1 lần.
+async function pushOneUpload(item, token) {
+  const cachedSha = githubShaCache.get(item.path);
+  let res = await uploadGithubFile(
+    item.path,
+    item.content,
+    item.message,
+    token,
+    cachedSha,
+  );
+
+  if (!res.ok) {
+    const freshSha = await getGithubFileSha(item.path, token);
+    if (freshSha !== cachedSha) {
+      res = await uploadGithubFile(
+        item.path,
+        item.content,
+        item.message,
+        token,
+        freshSha,
+      );
+    }
+  }
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(
+      `Upload ${item.path} thất bại: ${errData.message || res.status}`,
+    );
+  }
+
+  const resultJson = await res.json().catch(() => null);
+  const newSha = resultJson?.content?.sha || item.contentSha;
+  if (newSha) githubShaCache.set(item.path, newSha);
+}
+
+// Upload song song theo nhóm (mặc định 5 file/đợt) thay vì GET->PUT tuần tự
+// từng file một — nhanh hơn nhiều mà vẫn không vượt giới hạn rate-limit.
+async function pushUploadsInBatches(uploads, token) {
+  for (let i = 0; i < uploads.length; i += GITHUB_UPLOAD_BATCH_SIZE) {
+    const batch = uploads.slice(i, i + GITHUB_UPLOAD_BATCH_SIZE);
+    await Promise.all(batch.map((item) => pushOneUpload(item, token)));
+  }
 }
 
 async function pushToGithub() {
@@ -231,29 +388,26 @@ async function pushToGithub() {
       await saveDataToLocalStorage(false);
     }
 
-    const uploads = await buildGithubUploads(token);
-    for (const item of uploads) {
-      const sha = await getGithubFileSha(item.path, token);
-      const putRes = await uploadGithubFile(
-        item.path,
-        item.content,
-        item.message,
-        token,
-        sha,
-      );
-      if (!putRes.ok) {
-        const errData = await putRes.json();
-        throw new Error(
-          `Upload ${item.path} thất bại: ${errData.message || putRes.status}`,
-        );
-      }
-    }
+    await ensureSyncStateLoaded();
+
+    // Chốt danh sách sản phẩm cần đẩy TẠI THỜI ĐIỂM BẮT ĐẦU — nếu người dùng
+    // sửa thêm sản phẩm khác trong lúc đang đồng bộ, sản phẩm đó sẽ KHÔNG bị
+    // xoá dirty ở cuối, nên vẫn còn nguyên để lần đồng bộ sau đẩy tiếp.
+    const dirtyIdsSnapshot = new Set(dirtyProductIds);
+
+    const uploads = await buildGithubUploads(dirtyIdsSnapshot);
+    await pushUploadsInBatches(uploads, token);
+    await persistShaCache();
+
+    for (const id of dirtyIdsSnapshot) dirtyProductIds.delete(id);
+    await persistDirtyState();
+    pendingPhotoBase64.clear();
 
     setGithubLastSyncAt(Date.now());
     syncStatusEl.textContent =
       "Đã đồng bộ lên GitHub lúc " + new Date().toLocaleTimeString();
     toast("Đồng bộ lên GitHub thành công!");
-    hasUnsyncedChanges = false;
+    hasUnsyncedChanges = dirtyProductIds.size > 0;
   } catch (err) {
     console.error(err);
     syncStatusEl.textContent = "Lỗi đồng bộ: " + err.message;

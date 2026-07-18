@@ -18,6 +18,13 @@ const PRODUCT_DETAIL_DIR = "data/products";
 let idbPromise = null;
 const barcodeMap = new Map();
 
+// Cache base64 của ảnh NGAY lúc chụp (key = photoPath) để lúc đồng bộ lên
+// GitHub không phải đọc lại Blob từ IndexedDB rồi encode base64 lần nữa.
+// Chỉ tồn tại trong bộ nhớ phiên làm việc hiện tại (không cần lưu bền vững —
+// nếu tải lại trang trước khi đồng bộ, code sẽ tự đọc lại Blob như bình
+// thường), và bị xoá khỏi cache ngay sau khi đã đồng bộ thành công.
+const pendingPhotoBase64 = new Map();
+
 function productDetailPath(productId) {
   return `${PRODUCT_DETAIL_DIR}/${productId}.json`;
 }
@@ -368,6 +375,16 @@ async function saveProductPhoto(product, canvas) {
   product.photoCount = product.photoPaths.length;
   product.photos = product.photos || [];
   product.photos.push(URL.createObjectURL(blob));
+
+  // Cache base64 ngay bây giờ (đã có Blob sẵn trong tay) — tránh phải đọc lại
+  // Blob từ IndexedDB rồi encode lại từ đầu lúc bấm "Đồng bộ lên GitHub".
+  try {
+    pendingPhotoBase64.set(photoPath, await blobToBase64(blob));
+  } catch (err) {
+    console.warn("Cache base64 ảnh thất bại (không sao, sẽ encode lại lúc đồng bộ):", err);
+  }
+
+  if (typeof markProductDirty === "function") markProductDirty(product.id);
   return photoPath;
 }
 
@@ -442,11 +459,13 @@ async function removeProductPhoto(product, index) {
   const path = product.photoPaths[index];
   if (!path) return;
   await deleteImageBlob(path);
+  pendingPhotoBase64.delete(path);
   product.photoPaths.splice(index, 1);
   product.photoCount = product.photoPaths.length;
   if (Array.isArray(product.photos)) {
     product.photos.splice(index, 1);
   }
+  if (typeof markProductDirty === "function") markProductDirty(product.id);
 }
 
 saveDataBtn.addEventListener("click", () => {
